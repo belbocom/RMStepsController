@@ -25,11 +25,13 @@
 //
 
 #import "RMStepsController.h"
+#import "StepProxy.h"
 
 @interface RMStepsController () <RMStepsBarDelegate, RMStepsBarDataSource>
 
 @property (nonatomic, strong, readwrite) NSMutableDictionary *results;
-@property (nonatomic, strong) UIViewController *currentStepViewController;
+@property (nonatomic, strong, readwrite) NSArray *titles;
+@property (nonatomic, strong) StepProxy *currentStepViewController;
 
 @property (nonatomic, strong, readwrite) RMStepsBar *stepsBar;
 @property (nonatomic, strong) UIView *stepViewControllerContainer;
@@ -64,7 +66,7 @@
     [self.view addConstraint:constraint];
     
     [self loadStepViewControllers];
-    [self showStepViewController:[self.childViewControllers objectAtIndex:0] animated:NO];
+    [self showStepViewController:[self.childViewControllers objectAtIndex:0] animated:NO index:0];
 }
 
 #pragma mark - Properties
@@ -106,27 +108,34 @@
         insets.top += self.stepsBar.frame.size.height;
         
         [aViewController adaptToEdgeInsets:insets];
+        [[aViewController.childViewControllers objectAtIndex:0] adaptToEdgeInsets:insets];
     }
 }
 
 - (void)loadStepViewControllers {
+    self.titles = [self getTitles];
     NSArray *stepViewControllers = [self stepViewControllers];
     NSAssert([stepViewControllers count] > 0, @"Fatal: At least one step view controller must be returned by +[%@ stepViewControllers].", [self class]);
     
-    for(UIViewController *aViewController in stepViewControllers) {
-        NSAssert([aViewController isKindOfClass:[UIViewController class]], @"Fatal: %@ is not a subclass from UIViewController. Only UIViewControllers are supported by RMStepsController as steps.", [aViewController class]);
+    for (NSString *title in self.titles) {
         
-        aViewController.stepsController = self;
+        StepProxy *stepProxy = [StepProxy alloc];
+        [stepProxy.step setSelectedBarColor:[UIColor colorWithRed:233./255. green:78./255. blue:27./255. alpha:1.]];
+        [stepProxy.step setTitle:title];
         
-        [aViewController willMoveToParentViewController:self];
-        [self addChildViewController:aViewController];
-        [aViewController didMoveToParentViewController:self];
+        [stepProxy willMoveToParentViewController:self];
+        [self addChildViewController:stepProxy];
+        [stepProxy didMoveToParentViewController:self];
     }
     
     [self.stepsBar reloadData];
 }
 
-- (void)showStepViewController:(UIViewController *)aViewController animated:(BOOL)animated {
+- (void)showStepViewController:(StepProxy *)aViewController animated:(BOOL)animated index:(int)index {
+
+    [aViewController initWithController:[self getStep:index]];
+    [aViewController viewWillAppear:NO];
+    
     if(!animated) {
         [self showStepViewControllerWithoutAnimation:aViewController];
     } else {
@@ -136,8 +145,8 @@
     [self updateContentInsetsForViewController:aViewController];
 }
 
-- (void)showStepViewControllerWithoutAnimation:(UIViewController *)aViewController {
-    [self.currentStepViewController.view removeFromSuperview];
+- (void)showStepViewControllerWithoutAnimation:(StepProxy *)aViewController {
+    [self.currentStepViewController removeStep];
 
     CGFloat y = 0;
     if(![self extendViewControllerBelowBars:aViewController])
@@ -153,7 +162,7 @@
     [self.stepsBar setIndexOfSelectedStep:[self.childViewControllers indexOfObject:aViewController] animated:NO];
 }
 
-- (void)showStepViewControllerWithSlideInAnimation:(UIViewController *)aViewController {
+- (void)showStepViewControllerWithSlideInAnimation:(StepProxy *)aViewController {
     NSInteger oldIndex = [self.childViewControllers indexOfObject:self.currentStepViewController];
     NSInteger newIndex = [self.childViewControllers indexOfObject:aViewController];
     
@@ -171,6 +180,11 @@
     aViewController.view.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
     aViewController.view.translatesAutoresizingMaskIntoConstraints = YES;
     
+    UIViewController *realViewController = [[aViewController childViewControllers] objectAtIndex:0];
+    realViewController.view.frame = CGRectMake(0, 0, self.stepViewControllerContainer.frame.size.width, self.stepViewControllerContainer.frame.size.height - y);
+    realViewController.view.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
+    realViewController.view.translatesAutoresizingMaskIntoConstraints = YES;
+    
     [self.stepViewControllerContainer addSubview:aViewController.view];
     
     [self.stepsBar setIndexOfSelectedStep:[self.childViewControllers indexOfObject:aViewController] animated:YES];
@@ -180,7 +194,7 @@
         aViewController.view.frame = CGRectMake(0, y, blockself.stepViewControllerContainer.frame.size.width, blockself.stepViewControllerContainer.frame.size.height - y);
         blockself.currentStepViewController.view.frame = CGRectMake(fromLeft ? blockself.stepViewControllerContainer.frame.size.width : -blockself.stepViewControllerContainer.frame.size.width, blockself.currentStepViewController.view.frame.origin.y, blockself.currentStepViewController.view.frame.size.width, blockself.currentStepViewController.view.frame.size.height);
     } completion:^(BOOL finished) {
-        [blockself.currentStepViewController.view removeFromSuperview];
+        [blockself.currentStepViewController removeStep];
         blockself.currentStepViewController = aViewController;
     }];
 }
@@ -198,8 +212,8 @@
 - (void)showNextStep {
     NSInteger index = [self.childViewControllers indexOfObject:self.currentStepViewController];
     if(index < [self.childViewControllers count]-1) {
-        UIViewController *nextStepViewController = [self.childViewControllers objectAtIndex:index+1];
-        [self showStepViewController:nextStepViewController animated:YES];
+        StepProxy *nextStepViewController = [self.childViewControllers objectAtIndex:index+1];
+        [self showStepViewController:nextStepViewController animated:YES index:index+1];
     } else {
         [self finishedAllSteps];
     }
@@ -209,7 +223,7 @@
     NSInteger index = [self.childViewControllers indexOfObject:self.currentStepViewController];
     if(index > 0) {
         UIViewController *nextStepViewController = [self.childViewControllers objectAtIndex:index-1];
-        [self showStepViewController:nextStepViewController animated:YES];
+        [self showStepViewController:nextStepViewController animated:YES index:index-1];
     } else {
         [self canceled];
     }
@@ -225,7 +239,7 @@
 
 #pragma mark - RMStepsBar Delegates
 - (NSUInteger)numberOfStepsInStepsBar:(RMStepsBar *)bar {
-    return [self.childViewControllers count];
+    return [[self getTitles] count];
 }
 
 - (RMStep *)stepsBar:(RMStepsBar *)bar stepAtIndex:(NSUInteger)index {
@@ -237,7 +251,7 @@
 }
 
 - (void)stepsBar:(RMStepsBar *)bar shouldSelectStepAtIndex:(NSInteger)index {
-    [self showStepViewController:[self.childViewControllers objectAtIndex:index] animated:YES];
+    [self showStepViewController:[self.childViewControllers objectAtIndex:index] animated:YES index:index];
 }
 
 @end

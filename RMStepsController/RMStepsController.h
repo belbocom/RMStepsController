@@ -54,6 +54,9 @@
  */
 @property (nonatomic, strong, readonly) NSMutableDictionary *results;
 
+@property (nonatomic, strong, readonly) NSArray *titles;
+
+
 /// @name Instance Methods
 
 /**
@@ -64,6 +67,8 @@
  @return An array with one view controller for every step.
  */
 - (NSArray *)stepViewControllers;
+- (NSArray *)getTitles;
+- (RMStepsController *)getStep:(int)index;
 
 /**
  Call this method to proceed to the next step. When you call this method when already in the last step `-[RMStepsController finishedAllSteps]`will be called.
