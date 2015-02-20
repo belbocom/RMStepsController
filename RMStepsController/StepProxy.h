@@ -10,6 +10,8 @@
 #import <UIKit/UIKit.h>
 #import "RMStepsController.h"
 
+@class RMStepsController;
+
 @interface StepProxy : UIViewController {
     RMStepsController *stepController;
 }

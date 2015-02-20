@@ -28,6 +28,10 @@
 
 #import "RMStepsBar.h"
 #import "RMStep.h"
+#import "StepProxy.h"
+
+@class StepProxy;
+
 
 /**
  `RMStepsController` is an iOS control for guiding a user through a process step-by-step. It uses an instance of `RMStepsBar` for showing the currently selected step and the total number of steps.
@@ -116,5 +120,8 @@
  @param newInsets The new edge insets.
  */
 - (void)adaptToEdgeInsets:(UIEdgeInsets)newInsets;
+
+- (void)showStepViewController:(StepProxy *)aViewController animated:(BOOL)animated index:(int)index;
+
 
 @end
