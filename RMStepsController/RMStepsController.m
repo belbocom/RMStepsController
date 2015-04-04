@@ -114,8 +114,6 @@
 
 - (void)loadStepViewControllers {
     self.titles = [self getTitles];
-    NSArray *stepViewControllers = [self stepViewControllers];
-    NSAssert([stepViewControllers count] > 0, @"Fatal: At least one step view controller must be returned by +[%@ stepViewControllers].", [self class]);
     
     for (NSString *title in self.titles) {
         
